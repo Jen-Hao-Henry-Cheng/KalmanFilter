@@ -28,8 +28,6 @@ double accX, accY, accZ;
 double gyroX, gyroY, gyroZ;
 int16_t tempRaw;
 
-double gyroXangle, gyroYangle; // Angle calculate using the gyro only
-double compAngleX, compAngleY; // Calculated angle using a complementary filter
 double kalAngleX, kalAngleY; // Calculated angle using a Kalman filter
 
 uint32_t timer;
@@ -80,10 +78,6 @@ void setup() {
 
   kalmanX.setAngle(roll); // Set starting angle
   kalmanY.setAngle(pitch);
-  gyroXangle = roll;
-  gyroYangle = pitch;
-  compAngleX = roll;
-  compAngleY = pitch;
 
   timer = micros();
 }
@@ -120,9 +114,7 @@ void loop() {
   // This fixes the transition problem when the accelerometer angle jumps between -180 and 180 degrees
   if ((roll < -90 && kalAngleX > 90) || (roll > 90 && kalAngleX < -90)) {
     kalmanX.setAngle(roll);
-    compAngleX = roll;
     kalAngleX = roll;
-    gyroXangle = roll;
   } else
     kalAngleX = kalmanX.getAngle(roll, gyroXrate, dt); // Calculate the angle using a Kalman filter
 
@@ -133,9 +125,7 @@ void loop() {
   // This fixes the transition problem when the accelerometer angle jumps between -180 and 180 degrees
   if ((pitch < -90 && kalAngleY > 90) || (pitch > 90 && kalAngleY < -90)) {
     kalmanY.setAngle(pitch);
-    compAngleY = pitch;
     kalAngleY = pitch;
-    gyroYangle = pitch;
   } else
     kalAngleY = kalmanY.getAngle(pitch, gyroYrate, dt); // Calculate the angle using a Kalman filter
 
@@ -143,20 +133,6 @@ void loop() {
     gyroXrate = -gyroXrate; // Invert rate, so it fits the restriced accelerometer reading
   kalAngleX = kalmanX.getAngle(roll, gyroXrate, dt); // Calculate the angle using a Kalman filter
 #endif
-
-  gyroXangle += gyroXrate * dt; // Calculate gyro angle without any filter
-  gyroYangle += gyroYrate * dt;
-  //gyroXangle += kalmanX.getRate() * dt; // Calculate gyro angle using the unbiased rate
-  //gyroYangle += kalmanY.getRate() * dt;
-
-  compAngleX = 0.93 * (compAngleX + gyroXrate * dt) + 0.07 * roll; // Calculate the angle using a Complimentary filter
-  compAngleY = 0.93 * (compAngleY + gyroYrate * dt) + 0.07 * pitch;
-
-  // Reset the gyro angle when it has drifted too much
-  if (gyroXangle < -180 || gyroXangle > 180)
-    gyroXangle = kalAngleX;
-  if (gyroYangle < -180 || gyroYangle > 180)
-    gyroYangle = kalAngleY;
 
   /* Print Data */
 #if 0 // Set to 1 to activate
@@ -172,15 +148,11 @@ void loop() {
 #endif
 
   Serial.print(roll); Serial.print("\t");
-  Serial.print(gyroXangle); Serial.print("\t");
-  Serial.print(compAngleX); Serial.print("\t");
   Serial.print(kalAngleX); Serial.print("\t");
 
   Serial.print("\t");
 
   Serial.print(pitch); Serial.print("\t");
-  Serial.print(gyroYangle); Serial.print("\t");
-  Serial.print(compAngleY); Serial.print("\t");
   Serial.print(kalAngleY); Serial.print("\t");
 
 #if 0 // Set to 1 to print the temperature
