@@ -17,6 +17,7 @@
 
 #include <Wire.h>
 #include "Kalman.h" // Source: https://github.com/TKJElectronics/KalmanFilter
+#include "quaterion_filter.h"
 
 #define RESTRICT_PITCH // Comment out to restrict roll to ±90deg instead - please read: http://www.freescale.com/files/sensors/doc/app_note/AN3461.pdf
 
@@ -24,9 +25,7 @@ Kalman kalmanX; // Create the Kalman instances
 Kalman kalmanY;
 
 /* IMU Data */
-double accX, accY, accZ;
-double gyroX, gyroY, gyroZ;
-int16_t tempRaw;
+SensorData data;
 
 double kalAngleX, kalAngleY; // Calculated angle using a Kalman filter
 
@@ -61,19 +60,19 @@ void setup() {
 
   /* Set kalman and gyro starting angle */
   while (i2cRead(0x3B, i2cData, 6));
-  accX = (int16_t)((i2cData[0] << 8) | i2cData[1]);
-  accY = (int16_t)((i2cData[2] << 8) | i2cData[3]);
-  accZ = (int16_t)((i2cData[4] << 8) | i2cData[5]);
+  data.acc_x = (int16_t)((i2cData[0] << 8) | i2cData[1]);
+  data.acc_y = (int16_t)((i2cData[2] << 8) | i2cData[3]);
+  data.acc_z = (int16_t)((i2cData[4] << 8) | i2cData[5]);
 
   // Source: http://www.freescale.com/files/sensors/doc/app_note/AN3461.pdf eq. 25 and eq. 26
   // atan2 outputs the value of -π to π (radians) - see http://en.wikipedia.org/wiki/Atan2
   // It is then converted from radians to degrees
 #ifdef RESTRICT_PITCH // Eq. 25 and 26
-  double roll  = atan2(accY, accZ) * RAD_TO_DEG;
-  double pitch = atan(-accX / sqrt(accY * accY + accZ * accZ)) * RAD_TO_DEG;
+  float roll  = atan2(data.acc_y, data.acc_z) * RAD_TO_DEG;
+  float pitch = atan(-data.acc_x / sqrt(data.acc_y * data.acc_y + data.acc_z * data.acc_z)) * RAD_TO_DEG;
 #else // Eq. 28 and 29
-  double roll  = atan(accY / sqrt(accX * accX + accZ * accZ)) * RAD_TO_DEG;
-  double pitch = atan2(-accX, accZ) * RAD_TO_DEG;
+  float roll  = atan(data.acc_y / sqrt(data.acc_x * data.acc_x + data.acc_z * data.acc_z)) * RAD_TO_DEG;
+  float pitch = atan2(-data.acc_x, data.acc_z) * RAD_TO_DEG;
 #endif
 
   kalmanX.setAngle(roll); // Set starting angle
@@ -85,30 +84,30 @@ void setup() {
 void loop() {
   /* Update all the values */
   while (i2cRead(0x3B, i2cData, 14));
-  accX = (int16_t)((i2cData[0] << 8) | i2cData[1]);
-  accY = (int16_t)((i2cData[2] << 8) | i2cData[3]);
-  accZ = (int16_t)((i2cData[4] << 8) | i2cData[5]);
-  tempRaw = (int16_t)((i2cData[6] << 8) | i2cData[7]);
-  gyroX = (int16_t)((i2cData[8] << 8) | i2cData[9]);
-  gyroY = (int16_t)((i2cData[10] << 8) | i2cData[11]);
-  gyroZ = (int16_t)((i2cData[12] << 8) | i2cData[13]);;
+  data.acc_x = (int16_t)((i2cData[0] << 8) | i2cData[1]);
+  data.acc_y = (int16_t)((i2cData[2] << 8) | i2cData[3]);
+  data.acc_z = (int16_t)((i2cData[4] << 8) | i2cData[5]);
+  data.temp = (int16_t)((i2cData[6] << 8) | i2cData[7]);
+  data.gyro_x = (int16_t)((i2cData[8] << 8) | i2cData[9]);
+  data.gyro_y = (int16_t)((i2cData[10] << 8) | i2cData[11]);
+  data.gyro_z = (int16_t)((i2cData[12] << 8) | i2cData[13]);;
 
-  double dt = (double)(micros() - timer) / 1000000; // Calculate delta time
+  float dt = (float)(micros() - timer) / 1000000; // Calculate delta time
   timer = micros();
 
   // Source: http://www.freescale.com/files/sensors/doc/app_note/AN3461.pdf eq. 25 and eq. 26
   // atan2 outputs the value of -π to π (radians) - see http://en.wikipedia.org/wiki/Atan2
   // It is then converted from radians to degrees
 #ifdef RESTRICT_PITCH // Eq. 25 and 26
-  double roll  = atan2(accY, accZ) * RAD_TO_DEG;
-  double pitch = atan(-accX / sqrt(accY * accY + accZ * accZ)) * RAD_TO_DEG;
+  float roll  = atan2(data.acc_y, data.acc_z) * RAD_TO_DEG;
+  float pitch = atan(-data.acc_x / sqrt(data.acc_y * data.acc_y + data.acc_z * data.acc_z)) * RAD_TO_DEG;
 #else // Eq. 28 and 29
-  double roll  = atan(accY / sqrt(accX * accX + accZ * accZ)) * RAD_TO_DEG;
-  double pitch = atan2(-accX, accZ) * RAD_TO_DEG;
+  float roll  = atan(data.acc_y / sqrt(data.acc_x * data.acc_x + data.acc_z * data.acc_z)) * RAD_TO_DEG;
+  float pitch = atan2(-data.acc_x, data.acc_z) * RAD_TO_DEG;
 #endif
 
-  double gyroXrate = gyroX / 131.0; // Convert to deg/s
-  double gyroYrate = gyroY / 131.0; // Convert to deg/s
+  float gyroXrate = data.gyro_x / 131.0; // Convert to deg/s
+  float gyroYrate = data.gyro_y / 131.0; // Convert to deg/s
 
 #ifdef RESTRICT_PITCH
   // This fixes the transition problem when the accelerometer angle jumps between -180 and 180 degrees
@@ -135,18 +134,6 @@ void loop() {
 #endif
 
   /* Print Data */
-#if 0 // Set to 1 to activate
-  Serial.print(accX); Serial.print("\t");
-  Serial.print(accY); Serial.print("\t");
-  Serial.print(accZ); Serial.print("\t");
-
-  Serial.print(gyroX); Serial.print("\t");
-  Serial.print(gyroY); Serial.print("\t");
-  Serial.print(gyroZ); Serial.print("\t");
-
-  Serial.print("\t");
-#endif
-
   Serial.print(roll); Serial.print("\t");
   Serial.print(kalAngleX); Serial.print("\t");
 
@@ -155,12 +142,7 @@ void loop() {
   Serial.print(pitch); Serial.print("\t");
   Serial.print(kalAngleY); Serial.print("\t");
 
-#if 0 // Set to 1 to print the temperature
-  Serial.print("\t");
-
-  double temperature = (double)tempRaw / 340.0 + 36.53;
-  Serial.print(temperature); Serial.print("\t");
-#endif
+  ////////////////////////////
 
   Serial.print("\r\n");
   delay(2);
